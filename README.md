@@ -1,0 +1,48 @@
+# 项目管理平台 API
+
+一个 Django 后端接口项目。部门、项目类型、项目数据的主键均使用 UUID。
+
+接口文档见 [API_DOCS.md](API_DOCS.md)。
+
+服务器部署说明见 [DEPLOY.md](DEPLOY.md)。
+
+## 本地运行
+
+```bash
+python3 -m pip install -r requirements.txt
+python3 manage.py migrate
+python3 manage.py runserver
+```
+
+接口基础地址为 http://127.0.0.1:8000/api/。
+
+模板压缩包放在项目根目录的 `templates_packages/` 文件夹中：
+
+- `pc.zip`
+- `mobile.zip`
+
+项目上传压缩包会解压到项目根目录的 `project_files/<project_id>/` 文件夹中。
+
+## 接口
+
+- `GET /api/departments/?include_categories=1`：一级分类/部门列表
+- `POST /api/departments/`：新增一级分类，JSON：`{"name":"产品研发中心","sort_order":10}`
+- `GET /api/categories/?department_id=<uuid>`：二级分类/项目类型列表
+- `POST /api/categories/`：新增二级分类，JSON：`{"name":"产品原型","department_id":"<uuid>","sort_order":10}`
+- `GET /api/projects/?department_id=<uuid>&category_id=<uuid>`：项目列表
+- `POST /api/projects/`：新建项目
+- `GET|PUT|PATCH|DELETE /api/projects/<uuid>/`：项目详情、更新、删除
+
+新建项目 JSON 示例：
+
+```json
+{
+  "host": "project_center_admin",
+  "name": "数字人需求用例",
+  "template": "pc",
+  "description": "用于管理部门、项目类型和项目模板配置。",
+  "prompt": "",
+  "department_id": "<department_uuid>",
+  "category_id": "<category_uuid>"
+}
+```
