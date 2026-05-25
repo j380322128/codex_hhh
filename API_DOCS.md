@@ -330,6 +330,14 @@ multipart/form-data
 | project_id | 是 | 8 位项目 ID |
 | file | 是 | zip 压缩包文件 |
 
+处理逻辑：
+
+- 根据 `project_id` 定位 `/usr/share/nginx/client/<project_id>/`。
+- 如果项目文件夹不存在，会先创建。
+- 保留项目文件夹本身，删除文件夹内所有旧内容。
+- 校验上传 zip 内路径，禁止绝对路径和 `../`。
+- 将上传 zip 解压到 `/usr/share/nginx/client/<project_id>/`。
+
 成功响应示例：
 
 ```json

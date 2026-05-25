@@ -334,22 +334,27 @@ def _is_safe_zip_member(member_name):
     return ".." not in member_path.parts
 
 
+def _clear_directory_contents(target_dir):
+    target_dir.mkdir(parents=True, exist_ok=True)
+    for child in target_dir.iterdir():
+        if child.is_dir():
+            shutil.rmtree(child)
+        else:
+            child.unlink()
+
+
 def _extract_project_zip(uploaded_file, target_dir):
-    target_dir.mkdir(parents=True, exist_ok=True)
-    shutil.rmtree(target_dir)
-    target_dir.mkdir(parents=True, exist_ok=True)
+    _clear_directory_contents(target_dir)
 
     try:
         with zipfile.ZipFile(uploaded_file) as archive:
             for member in archive.infolist():
                 if not _is_safe_zip_member(member.filename):
-                    shutil.rmtree(target_dir)
-                    target_dir.mkdir(parents=True, exist_ok=True)
+                    _clear_directory_contents(target_dir)
                     return None, "压缩包包含非法路径"
             archive.extractall(target_dir)
     except zipfile.BadZipFile:
-        shutil.rmtree(target_dir)
-        target_dir.mkdir(parents=True, exist_ok=True)
+        _clear_directory_contents(target_dir)
         return None, "上传文件必须是 zip 压缩包"
 
     extracted_files = [
