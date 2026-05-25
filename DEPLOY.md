@@ -2,7 +2,11 @@
 
 服务器已有 Python 3.6.8 时，可以直接使用项目自带脚本部署。脚本会检测 Python 版本，低于 3.10 时会在项目目录下安装独立 Python 运行时，不会替换系统 Python。
 
-注意：首次部署需要服务器能访问 GitHub 和 PyPI，用于下载项目内 Python 运行时和安装 Python 依赖。
+注意：首次部署需要下载项目内 Python 运行时和安装 Python 依赖。脚本默认使用清华镜像：
+
+- Miniforge：`https://mirrors.tuna.tsinghua.edu.cn/github-release/conda-forge/miniforge/LatestRelease`
+- Conda：`https://mirrors.tuna.tsinghua.edu.cn/anaconda`
+- PyPI：`https://pypi.tuna.tsinghua.edu.cn/simple`
 
 ## 一键启动
 
@@ -54,6 +58,9 @@ DJANGO_ALLOWED_HOSTS=*
 DJANGO_SECRET_KEY=请替换成随机字符串
 GUNICORN_WORKERS=2
 GUNICORN_TIMEOUT=120
+MINIFORGE_BASE_URL=https://mirrors.tuna.tsinghua.edu.cn/github-release/conda-forge/miniforge/LatestRelease
+CONDA_MIRROR_URL=https://mirrors.tuna.tsinghua.edu.cn/anaconda
+PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
 示例：

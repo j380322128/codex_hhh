@@ -8,6 +8,9 @@ APP_HOST="${APP_HOST:-0.0.0.0}"
 APP_PORT="${APP_PORT:-8000}"
 CHECK_HOST="${CHECK_HOST:-127.0.0.1}"
 PYTHON_VERSION="${PYTHON_VERSION:-3.11}"
+MINIFORGE_BASE_URL="${MINIFORGE_BASE_URL:-https://mirrors.tuna.tsinghua.edu.cn/github-release/conda-forge/miniforge/LatestRelease}"
+CONDA_MIRROR_URL="${CONDA_MIRROR_URL:-https://mirrors.tuna.tsinghua.edu.cn/anaconda}"
+PIP_INDEX_URL="${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
 MIN_PYTHON_MAJOR=3
 MIN_PYTHON_MINOR=10
 MAX_PYTHON_MAJOR=3
@@ -74,10 +77,11 @@ detect_platform() {
 }
 
 install_project_python() {
-  local platform installer installer_url conda_python
+  local platform installer installer_url conda_python condarc_file
   platform="$(detect_platform)"
   installer="$RUNTIME_DIR/miniforge.sh"
   conda_python="$RUNTIME_DIR/miniforge/bin/python"
+  condarc_file="$RUNTIME_DIR/condarc"
 
   if [ -x "$conda_python" ] && python_is_compatible "$conda_python"; then
     printf '%s' "$conda_python"
@@ -85,7 +89,7 @@ install_project_python() {
   fi
 
   mkdir -p "$RUNTIME_DIR"
-  installer_url="https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-${platform}.sh"
+  installer_url="${MINIFORGE_BASE_URL%/}/Miniforge3-${platform}.sh"
   log "当前 Python 版本过低，开始安装项目内 Python ${PYTHON_VERSION}：$installer_url"
 
   if command -v curl >/dev/null 2>&1; then
@@ -98,7 +102,17 @@ install_project_python() {
   fi
 
   bash "$installer" -b -p "$RUNTIME_DIR/miniforge" >&2
-  "$RUNTIME_DIR/miniforge/bin/conda" install -y "python=${PYTHON_VERSION}" pip >&2
+  cat > "$condarc_file" <<EOF
+channels:
+  - conda-forge
+show_channel_urls: true
+default_channels:
+  - ${CONDA_MIRROR_URL}/pkgs/main
+  - ${CONDA_MIRROR_URL}/pkgs/r
+custom_channels:
+  conda-forge: ${CONDA_MIRROR_URL}/cloud
+EOF
+  CONDARC="$condarc_file" "$RUNTIME_DIR/miniforge/bin/conda" install -y "python=${PYTHON_VERSION}" pip >&2
   printf '%s' "$conda_python"
 }
 
@@ -177,10 +191,10 @@ fi
 
 VENV_PYTHON="$VENV_DIR/bin/python"
 log "升级 pip/setuptools/wheel"
-"$VENV_PYTHON" -m pip install --upgrade pip setuptools wheel
+"$VENV_PYTHON" -m pip install -i "$PIP_INDEX_URL" --upgrade pip setuptools wheel
 
 log "安装项目依赖"
-"$VENV_PYTHON" -m pip install -r requirements.txt
+"$VENV_PYTHON" -m pip install -i "$PIP_INDEX_URL" -r requirements.txt
 
 export DJANGO_DEBUG="${DJANGO_DEBUG:-0}"
 export DJANGO_ALLOWED_HOSTS="${DJANGO_ALLOWED_HOSTS:-*}"
