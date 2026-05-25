@@ -1,4 +1,5 @@
 import json
+import mimetypes
 import shutil
 import zipfile
 from json import JSONDecodeError
@@ -13,6 +14,8 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
 from .models import Department, Project, ProjectCategory
+
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".bmp", ".ico"}
 
 
 @require_http_methods(["GET"])
@@ -57,6 +60,10 @@ def _project_files_dir(project_id):
     return settings.PROJECT_FILES_DIR / str(project_id)
 
 
+def _project_images_dir(project_id):
+    return _project_files_dir(project_id) / "assets" / "images"
+
+
 def _template_package_payload(request, template):
     filename = f"{template}.zip"
     package_path = _template_package_path(template)
@@ -69,8 +76,34 @@ def _template_package_payload(request, template):
     }
 
 
-def _project_payload(project, request=None):
-    return {
+def _project_image_assets(project, request):
+    images_dir = _project_images_dir(project.id)
+    if not images_dir.exists():
+        return []
+
+    assets = []
+    for path in sorted(images_dir.rglob("*")):
+        if not path.is_file() or path.suffix.lower() not in IMAGE_EXTENSIONS:
+            continue
+        relative_path = path.relative_to(images_dir).as_posix()
+        download_url = reverse(
+            "projects:project_image_asset",
+            args=[project.id, relative_path],
+        )
+        assets.append(
+            {
+                "name": path.name,
+                "path": f"assets/images/{relative_path}",
+                "relative_path": relative_path,
+                "size": path.stat().st_size,
+                "url": request.build_absolute_uri(download_url),
+            }
+        )
+    return assets
+
+
+def _project_payload(project, request=None, include_assets=False):
+    payload = {
         "id": str(project.id),
         "host": project.host,
         "url": project.public_url,
@@ -93,6 +126,9 @@ def _project_payload(project, request=None):
         if request
         else None,
     }
+    if include_assets and request:
+        payload["image_assets"] = _project_image_assets(project, request)
+    return payload
 
 
 def _department_payload(department, include_categories=False):
@@ -469,6 +505,7 @@ def projects(request):
         )
     except IntegrityError:
         return _error("主机名已存在", errors={"host": "主机名已存在"})
+    _project_files_dir(project.id).mkdir(parents=True, exist_ok=True)
     return _success(_project_payload(project, request), status=201)
 
 
@@ -480,7 +517,7 @@ def project_detail(request, project_id):
         return _error("项目不存在", status=404, code=404)
 
     if request.method == "GET":
-        return _success(_project_payload(project, request))
+        return _success(_project_payload(project, request, include_assets=True))
 
     if request.method == "DELETE":
         project.delete()
@@ -532,6 +569,25 @@ def template_package_download(request, template):
         as_attachment=True,
         filename=package_path.name,
     )
+
+
+@require_http_methods(["GET"])
+def project_image_asset(request, project_id, image_path):
+    project = Project.objects.filter(id=project_id).first()
+    if project is None:
+        return _error("项目不存在", status=404, code=404)
+
+    if not _is_safe_zip_member(image_path):
+        return _error("图片路径非法", status=400)
+
+    image_file = _project_images_dir(project.id) / image_path
+    if not image_file.exists() or not image_file.is_file():
+        return _error("图片不存在", status=404, code=404)
+    if image_file.suffix.lower() not in IMAGE_EXTENSIONS:
+        return _error("文件不是支持的图片类型", status=400)
+
+    content_type = mimetypes.guess_type(str(image_file))[0] or "application/octet-stream"
+    return FileResponse(image_file.open("rb"), content_type=content_type)
 
 
 @csrf_exempt

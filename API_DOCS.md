@@ -64,6 +64,7 @@ Content-Type: application/json
 | GET | `/api/projects/` | 获取项目列表 |
 | POST | `/api/projects/` | 新建项目 |
 | GET | `/api/projects/<project_id>/` | 获取项目详情 |
+| GET | `/api/projects/<project_id>/images/<image_path>/` | 读取项目图片资源 |
 | PUT | `/api/projects/<project_id>/` | 完整更新项目 |
 | PATCH | `/api/projects/<project_id>/` | 局部更新项目 |
 | DELETE | `/api/projects/<project_id>/` | 删除项目 |
@@ -251,6 +252,8 @@ POST /api/projects/
 | department_id | 是 | 所属一级分类自增 ID |
 | category_id | 是 | 所属二级分类自增 ID，必须属于当前一级分类 |
 
+说明：新建项目成功后，后端会自动创建项目文件夹 `project_files/<project_id>/`。
+
 ### 获取 / 修改 / 删除项目
 
 ```http
@@ -261,6 +264,42 @@ DELETE /api/projects/<project_id>/
 ```
 
 说明：`project_id` 是 8 位短 UUID 字符串。
+
+项目详情响应会额外返回 `image_assets`。后端会读取：
+
+```text
+project_files/<project_id>/assets/images/
+```
+
+下的所有图片资源，支持 `.jpg`、`.jpeg`、`.png`、`.gif`、`.webp`、`.svg`、`.bmp`、`.ico`。
+
+响应字段示例：
+
+```json
+{
+  "image_assets": [
+    {
+      "name": "logo.png",
+      "path": "assets/images/logo.png",
+      "relative_path": "logo.png",
+      "size": 12345,
+      "url": "http://127.0.0.1:8000/api/projects/99999999/images/logo.png/"
+    }
+  ]
+}
+```
+
+### 读取项目图片资源
+
+```http
+GET /api/projects/<project_id>/images/<image_path>/
+```
+
+说明：
+
+- `image_path` 是相对于 `assets/images/` 的路径。
+- 例如图片文件为 `project_files/99999999/assets/images/logo.png`，访问地址为 `/api/projects/99999999/images/logo.png/`。
+- 例如图片文件为 `project_files/99999999/assets/images/banner/home.png`，访问地址为 `/api/projects/99999999/images/banner/home.png/`。
 
 ### 上传并解压项目压缩包
 

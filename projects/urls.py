@@ -16,6 +16,11 @@ urlpatterns = [
         views.upload_project_package,
         name="upload_project_package",
     ),
+    path(
+        "projects/<str:project_id>/images/<path:image_path>/",
+        views.project_image_asset,
+        name="project_image_asset",
+    ),
     path("projects/<str:project_id>/", views.project_detail, name="project_detail"),
     path(
         "template-packages/<str:template>/download/",
