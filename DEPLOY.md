@@ -115,3 +115,21 @@ chmod +x scripts/diagnose_server.sh
 ```
 
 脚本会安装依赖、执行数据库迁移、收集静态文件，并重启服务。
+
+## 主键规则变更后的处理
+
+如果服务器上已经用旧版本创建过 `db.sqlite3`，旧库里部门和分类还是 UUID 主键。更新到新版本后，建议在没有重要数据时直接重建数据库：
+
+```bash
+cd /usr/share/nginx/client/codex_hhh
+bash scripts/stop_server.sh
+rm -f db.sqlite3
+APP_PORT=8010 bash scripts/run_server.sh
+```
+
+重建后默认数据 ID：
+
+- 产品研发中心：`department_id=1`
+- 产品原型：`category_id=1`
+- 企业宣传：`category_id=2`
+- 示例项目：`project_id=99999999`

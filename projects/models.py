@@ -4,8 +4,11 @@ from django.db import models
 from django.utils import timezone
 
 
+def generate_short_uuid():
+    return uuid.uuid4().hex[:8]
+
+
 class Department(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField("部门名称", max_length=80, unique=True)
     sort_order = models.PositiveIntegerField("排序", default=0)
     created_at = models.DateTimeField("创建时间", default=timezone.now)
@@ -20,7 +23,6 @@ class Department(models.Model):
 
 
 class ProjectCategory(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField("分类名称", max_length=80)
     department = models.ForeignKey(
         Department,
@@ -49,7 +51,13 @@ class Project(models.Model):
         (TEMPLATE_MOBILE, "手机端"),
     ]
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    id = models.CharField(
+        "项目ID",
+        primary_key=True,
+        max_length=8,
+        default=generate_short_uuid,
+        editable=False,
+    )
     host = models.SlugField("主机名", max_length=120, unique=True)
     name = models.CharField("项目名称", max_length=120)
     template = models.CharField("模板", max_length=20, choices=TEMPLATE_CHOICES)
@@ -77,6 +85,14 @@ class Project(models.Model):
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        if self._state.adding:
+            if not self.id:
+                self.id = generate_short_uuid()
+            while Project.objects.filter(id=self.id).exists():
+                self.id = generate_short_uuid()
+        super().save(*args, **kwargs)
 
     @property
     def public_url(self):

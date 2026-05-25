@@ -1,6 +1,6 @@
 # 项目管理平台 API
 
-一个 Django 后端接口项目。部门、项目类型、项目数据的主键均使用 UUID。
+一个 Django 后端接口项目。项目主键为 8 位短 UUID 字符串；部门、项目类型主键为自增整数。
 
 接口文档见 [API_DOCS.md](API_DOCS.md)。
 
@@ -27,11 +27,11 @@ python3 manage.py runserver
 
 - `GET /api/departments/?include_categories=1`：一级分类/部门列表
 - `POST /api/departments/`：新增一级分类，JSON：`{"name":"产品研发中心","sort_order":10}`
-- `GET /api/categories/?department_id=<uuid>`：二级分类/项目类型列表
-- `POST /api/categories/`：新增二级分类，JSON：`{"name":"产品原型","department_id":"<uuid>","sort_order":10}`
-- `GET /api/projects/?department_id=<uuid>&category_id=<uuid>`：项目列表
+- `GET /api/categories/?department_id=<id>`：二级分类/项目类型列表
+- `POST /api/categories/`：新增二级分类，JSON：`{"name":"产品原型","department_id":1,"sort_order":10}`
+- `GET /api/projects/?department_id=<id>&category_id=<id>`：项目列表
 - `POST /api/projects/`：新建项目
-- `GET|PUT|PATCH|DELETE /api/projects/<uuid>/`：项目详情、更新、删除
+- `GET|PUT|PATCH|DELETE /api/projects/<project_id>/`：项目详情、更新、删除
 
 新建项目 JSON 示例：
 
@@ -42,7 +42,7 @@ python3 manage.py runserver
   "template": "pc",
   "description": "用于管理部门、项目类型和项目模板配置。",
   "prompt": "",
-  "department_id": "<department_uuid>",
-  "category_id": "<category_uuid>"
+  "department_id": 1,
+  "category_id": 1
 }
 ```

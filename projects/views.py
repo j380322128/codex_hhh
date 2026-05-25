@@ -40,6 +40,14 @@ def _read_json(request):
         return None
 
 
+def _parse_int_id(value, field_name, errors):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        errors[field_name] = "ID 必须是整数"
+        return None
+
+
 def _template_package_path(template):
     filename = f"{template}.zip"
     return settings.TEMPLATE_PACKAGE_DIR / filename
@@ -152,11 +160,13 @@ def _validate_category_data(data, partial=False):
         if not partial:
             errors["department_id"] = "所属部门不能为空"
     else:
-        department = Department.objects.filter(id=department_id).first()
-        if department is None:
-            errors["department_id"] = "所属部门不存在"
-        else:
-            values["department_id"] = department.id
+        parsed_department_id = _parse_int_id(department_id, "department_id", errors)
+        if parsed_department_id is not None:
+            department = Department.objects.filter(id=parsed_department_id).first()
+            if department is None:
+                errors["department_id"] = "所属部门不存在"
+            else:
+                values["department_id"] = department.id
 
     if "sort_order" in data:
         try:
@@ -205,13 +215,21 @@ def _validate_project_data(data, partial=False):
     department = None
     category = None
     if "department_id" in values:
-        department = Department.objects.filter(id=values["department_id"]).first()
-        if department is None:
-            errors["department_id"] = "所属部门不存在"
+        department_id = _parse_int_id(values["department_id"], "department_id", errors)
+        if department_id is not None:
+            department = Department.objects.filter(id=department_id).first()
+            if department is None:
+                errors["department_id"] = "所属部门不存在"
+            else:
+                values["department_id"] = department.id
     if "category_id" in values:
-        category = ProjectCategory.objects.filter(id=values["category_id"]).first()
-        if category is None:
-            errors["category_id"] = "项目类型不存在"
+        category_id = _parse_int_id(values["category_id"], "category_id", errors)
+        if category_id is not None:
+            category = ProjectCategory.objects.filter(id=category_id).first()
+            if category is None:
+                errors["category_id"] = "项目类型不存在"
+            else:
+                values["category_id"] = category.id
     if department and category and category.department_id != department.id:
         errors["category_id"] = "项目类型必须属于所属部门"
 
@@ -412,9 +430,15 @@ def projects(request):
         category_id = request.GET.get("category_id")
         keyword = request.GET.get("keyword")
         if department_id:
-            queryset = queryset.filter(department_id=department_id)
+            try:
+                queryset = queryset.filter(department_id=int(department_id))
+            except (TypeError, ValueError):
+                return _error("参数错误", errors={"department_id": "ID 必须是整数"})
         if category_id:
-            queryset = queryset.filter(category_id=category_id)
+            try:
+                queryset = queryset.filter(category_id=int(category_id))
+            except (TypeError, ValueError):
+                return _error("参数错误", errors={"category_id": "ID 必须是整数"})
         if keyword:
             queryset = queryset.filter(name__icontains=keyword.strip())
         return _success([_project_payload(item, request) for item in queryset])
