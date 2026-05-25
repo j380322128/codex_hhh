@@ -42,7 +42,7 @@ Content-Type: application/json
 - 一级分类和二级分类主键为自增整数，例如 `1`。
 - 时间格式为 `YYYY-MM-DD HH:mm:ss`。
 - 项目模板 `template` 可选值为 `pc`、`mobile`。
-- 项目根目录下的 `templates_packages/` 文件夹用于存放模板压缩包：`pc.zip`、`mobile.zip`。
+- 项目根目录下的 `templates_packages/` 文件夹用于存放模板压缩包：`pc_tempate.zip`、`wap_template.zip`。
 
 ## 接口总览
 
@@ -210,7 +210,7 @@ GET /api/projects/?department_id=<department_id>&category_id=<category_id>&keywo
       "created_at": "2026-05-20 09:30:00",
       "updated_at": "2026-05-20 09:30:00",
       "template_package": {
-        "name": "pc.zip",
+        "name": "pc_tempate.zip",
         "template": "pc",
         "exists": true,
         "download_url": "http://127.0.0.1:8000/api/template-packages/pc/download/"
@@ -256,8 +256,8 @@ POST /api/projects/
 
 模板对应关系：
 
-- `template=pc`：解压 `templates_packages/pc.zip`
-- `template=mobile`：解压 `templates_packages/mobile.zip`
+- `template=pc`：解压 `templates_packages/pc_tempate.zip`
+- `template=mobile`：解压 `templates_packages/wap_template.zip`
 
 如果对应模板压缩包不存在或不是合法 zip，新建项目会失败并回滚数据库记录。
 
@@ -356,8 +356,8 @@ GET /api/template-packages/<template>/download/
 
 说明：
 
-- 下载 `pc` 模板：`GET /api/template-packages/pc/download/`
-- 下载移动端模板：`GET /api/template-packages/mobile/download/`
+- 下载 `pc` 模板：`GET /api/template-packages/pc/download/`，对应 `pc_tempate.zip`
+- 下载移动端模板：`GET /api/template-packages/mobile/download/`，对应 `wap_template.zip`
 - 文件需要放在项目根目录的 `templates_packages/` 文件夹中。
 
 ## 常见错误

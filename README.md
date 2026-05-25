@@ -18,8 +18,8 @@ python3 manage.py runserver
 
 模板压缩包放在项目根目录的 `templates_packages/` 文件夹中：
 
-- `pc.zip`
-- `mobile.zip`
+- `pc_tempate.zip`
+- `wap_template.zip`
 
 项目上传压缩包会解压到项目工作目录的 `<project_id>/` 文件夹中。服务器默认项目工作目录是 `/usr/share/nginx/client`。
 

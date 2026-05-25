@@ -16,6 +16,10 @@ from django.views.decorators.http import require_http_methods
 from .models import Department, Project, ProjectCategory
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".bmp", ".ico"}
+TEMPLATE_PACKAGE_FILES = {
+    Project.TEMPLATE_PC: "pc_tempate.zip",
+    Project.TEMPLATE_MOBILE: "wap_template.zip",
+}
 
 
 @require_http_methods(["GET"])
@@ -52,7 +56,7 @@ def _parse_int_id(value, field_name, errors):
 
 
 def _template_package_path(template):
-    filename = f"{template}.zip"
+    filename = TEMPLATE_PACKAGE_FILES.get(template, f"{template}.zip")
     return settings.TEMPLATE_PACKAGE_DIR / filename
 
 
@@ -71,11 +75,10 @@ def _project_images_dir(project_id):
 
 
 def _template_package_payload(request, template):
-    filename = f"{template}.zip"
     package_path = _template_package_path(template)
     download_url = reverse("projects:template_package_download", args=[template])
     return {
-        "name": filename,
+        "name": package_path.name,
         "template": template,
         "exists": package_path.exists(),
         "download_url": request.build_absolute_uri(download_url),
