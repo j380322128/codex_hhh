@@ -58,6 +58,7 @@ DJANGO_ALLOWED_HOSTS=*
 DJANGO_SECRET_KEY=请替换成随机字符串
 GUNICORN_WORKERS=2
 GUNICORN_TIMEOUT=120
+PROJECT_WORKSPACE_DIR=/usr/share/nginx/client
 MINIFORGE_BASE_URL=https://mirrors.tuna.tsinghua.edu.cn/github-release/conda-forge/miniforge/LatestRelease
 CONDA_MIRROR_URL=https://mirrors.tuna.tsinghua.edu.cn/anaconda
 PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
@@ -104,7 +105,7 @@ chmod +x scripts/diagnose_server.sh
 - `.runtime/`：当服务器 Python 版本过低时，脚本安装的项目内 Python。
 - `.venv/`：项目虚拟环境。
 - `templates_packages/`：放置 `pc.zip`、`mobile.zip` 模板压缩包。
-- `project_files/<project_id>/`：项目上传压缩包解压后的目录。
+- `PROJECT_WORKSPACE_DIR/<project_id>/`：项目上传压缩包解压后的目录。服务器默认是 `/usr/share/nginx/client/<project_id>/`。
 
 ## 重新部署
 

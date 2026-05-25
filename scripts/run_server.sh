@@ -4,6 +4,7 @@ set -euo pipefail
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_DIR"
 
+PROJECT_WORKSPACE_DIR="${PROJECT_WORKSPACE_DIR:-$(cd "$PROJECT_DIR/.." && pwd)}"
 APP_HOST="${APP_HOST:-0.0.0.0}"
 APP_PORT="${APP_PORT:-8000}"
 CHECK_HOST="${CHECK_HOST:-127.0.0.1}"
@@ -20,7 +21,7 @@ VENV_DIR="$PROJECT_DIR/.venv"
 LOG_DIR="$PROJECT_DIR/logs"
 PID_FILE="$LOG_DIR/gunicorn.pid"
 
-mkdir -p "$LOG_DIR" "$PROJECT_DIR/templates_packages" "$PROJECT_DIR/project_files"
+mkdir -p "$LOG_DIR" "$PROJECT_DIR/templates_packages" "$PROJECT_WORKSPACE_DIR"
 
 log() {
   printf '[deploy] %s\n' "$*" >&2
@@ -199,6 +200,7 @@ log "安装项目依赖"
 export DJANGO_DEBUG="${DJANGO_DEBUG:-0}"
 export DJANGO_ALLOWED_HOSTS="${DJANGO_ALLOWED_HOSTS:-*}"
 export DJANGO_SECRET_KEY="${DJANGO_SECRET_KEY:-django-insecure-change-me-before-deploying}"
+export PROJECT_WORKSPACE_DIR
 
 log "执行数据库迁移"
 "$VENV_PYTHON" manage.py migrate --noinput

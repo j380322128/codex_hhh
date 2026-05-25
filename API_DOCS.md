@@ -252,7 +252,14 @@ POST /api/projects/
 | department_id | 是 | 所属一级分类自增 ID |
 | category_id | 是 | 所属二级分类自增 ID，必须属于当前一级分类 |
 
-说明：新建项目成功后，后端会自动创建项目文件夹 `project_files/<project_id>/`。
+说明：新建项目成功后，后端会自动在项目工作目录下创建项目文件夹，并根据 `template` 解压对应模板包到该文件夹中。服务器默认位置为 `/usr/share/nginx/client/<project_id>/`。
+
+模板对应关系：
+
+- `template=pc`：解压 `templates_packages/pc.zip`
+- `template=mobile`：解压 `templates_packages/mobile.zip`
+
+如果对应模板压缩包不存在或不是合法 zip，新建项目会失败并回滚数据库记录。
 
 ### 获取 / 修改 / 删除项目
 
@@ -268,7 +275,7 @@ DELETE /api/projects/<project_id>/
 项目详情响应会额外返回 `image_assets`。后端会读取：
 
 ```text
-project_files/<project_id>/assets/images/
+/usr/share/nginx/client/<project_id>/assets/images/
 ```
 
 下的所有图片资源，支持 `.jpg`、`.jpeg`、`.png`、`.gif`、`.webp`、`.svg`、`.bmp`、`.ico`。
@@ -298,8 +305,9 @@ GET /api/projects/<project_id>/images/<image_path>/
 说明：
 
 - `image_path` 是相对于 `assets/images/` 的路径。
-- 例如图片文件为 `project_files/99999999/assets/images/logo.png`，访问地址为 `/api/projects/99999999/images/logo.png/`。
-- 例如图片文件为 `project_files/99999999/assets/images/banner/home.png`，访问地址为 `/api/projects/99999999/images/banner/home.png/`。
+- 例如图片文件为 `/usr/share/nginx/client/99999999/assets/images/logo.png`，访问地址为 `/api/projects/99999999/images/logo.png/`。
+- 例如图片文件为 `/usr/share/nginx/client/99999999/assets/images/banner/home.png`，访问地址为 `/api/projects/99999999/images/banner/home.png/`。
+- 删除项目时，后端会同步删除 `/usr/share/nginx/client/<project_id>/` 文件夹。
 
 ### 上传并解压项目压缩包
 
@@ -328,7 +336,7 @@ multipart/form-data
   "message": "ok",
   "data": {
     "project_id": "99999999",
-    "directory": "/Users/jihao/Desktop/hhh/codex_hhh/project_files/99999999",
+    "directory": "/usr/share/nginx/client/99999999",
     "file_count": 2,
     "files": [
       "index.html",

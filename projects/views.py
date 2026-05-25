@@ -57,7 +57,13 @@ def _template_package_path(template):
 
 
 def _project_files_dir(project_id):
-    return settings.PROJECT_FILES_DIR / str(project_id)
+    workspace_dir = settings.PROJECT_WORKSPACE_DIR.resolve()
+    project_dir = (workspace_dir / str(project_id)).resolve()
+    if str(project_dir) == str(workspace_dir) or not str(project_dir).startswith(
+        str(workspace_dir) + "/"
+    ):
+        raise ValueError("项目目录非法")
+    return project_dir
 
 
 def _project_images_dir(project_id):
@@ -336,6 +342,18 @@ def _extract_project_zip(uploaded_file, target_dir):
     return extracted_files, None
 
 
+def _extract_template_package_to_project(project):
+    package_path = _template_package_path(project.template)
+    if not package_path.exists():
+        return None, "模板压缩包不存在"
+
+    try:
+        with package_path.open("rb") as package_file:
+            return _extract_project_zip(package_file, _project_files_dir(project.id))
+    except OSError as exc:
+        return None, f"模板文件处理失败：{exc}"
+
+
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
 def departments(request):
@@ -490,6 +508,8 @@ def projects(request):
     host_error = _validate_project_host_unique(values)
     if host_error:
         errors["host"] = host_error
+    if "template" in values and not _template_package_path(values["template"]).exists():
+        errors["template"] = "模板压缩包不存在"
     if errors:
         return _error("参数错误", errors=errors)
 
@@ -505,7 +525,12 @@ def projects(request):
         )
     except IntegrityError:
         return _error("主机名已存在", errors={"host": "主机名已存在"})
-    _project_files_dir(project.id).mkdir(parents=True, exist_ok=True)
+    extracted_files, error_message = _extract_template_package_to_project(project)
+    if error_message:
+        project_dir = _project_files_dir(project.id)
+        project.delete()
+        shutil.rmtree(project_dir, ignore_errors=True)
+        return _error(error_message, errors={"template": error_message})
     return _success(_project_payload(project, request), status=201)
 
 
@@ -520,7 +545,9 @@ def project_detail(request, project_id):
         return _success(_project_payload(project, request, include_assets=True))
 
     if request.method == "DELETE":
+        project_dir = _project_files_dir(project.id)
         project.delete()
+        shutil.rmtree(project_dir, ignore_errors=True)
         return _success(None)
 
     data = _read_json(request)
