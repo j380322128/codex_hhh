@@ -357,6 +357,18 @@ def _extract_template_package_to_project(project):
         return None, f"模板文件处理失败：{exc}"
 
 
+def _remove_project_dir(project_id):
+    project_dir = _project_files_dir(project_id)
+    if not project_dir.exists():
+        return project_dir, None
+
+    try:
+        shutil.rmtree(project_dir)
+    except OSError as exc:
+        return project_dir, f"项目文件夹删除失败：{exc}"
+    return project_dir, None
+
+
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
 def departments(request):
@@ -548,10 +560,15 @@ def project_detail(request, project_id):
         return _success(_project_payload(project, request, include_assets=True))
 
     if request.method == "DELETE":
-        project_dir = _project_files_dir(project.id)
+        project_dir, remove_error = _remove_project_dir(project.id)
+        if remove_error:
+            return _error(
+                remove_error,
+                status=500,
+                errors={"directory": str(project_dir)},
+            )
         project.delete()
-        shutil.rmtree(project_dir, ignore_errors=True)
-        return _success(None)
+        return _success({"deleted_directory": str(project_dir)})
 
     data = _read_json(request)
     if data is None:

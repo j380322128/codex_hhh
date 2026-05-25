@@ -272,6 +272,8 @@ DELETE /api/projects/<project_id>/
 
 说明：`project_id` 是 8 位短 UUID 字符串。
 
+删除项目时会先删除项目目录 `/usr/share/nginx/client/<project_id>/`。如果目录删除失败，接口会返回错误并保留数据库记录。
+
 项目详情响应会额外返回 `image_assets`。后端会读取：
 
 ```text
