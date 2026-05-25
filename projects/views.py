@@ -2,6 +2,7 @@ import json
 import mimetypes
 import shutil
 import zipfile
+from contextlib import suppress
 from json import JSONDecodeError
 from pathlib import Path, PurePosixPath
 
@@ -343,16 +344,60 @@ def _clear_directory_contents(target_dir):
             child.unlink()
 
 
+def _zip_member_path(member_name):
+    return PurePosixPath(member_name)
+
+
+def _should_strip_zip_root(member_paths):
+    file_paths = [path for path in member_paths if path.parts]
+    if not file_paths:
+        return False
+    top_levels = {path.parts[0] for path in file_paths}
+    return len(top_levels) == 1 and all(len(path.parts) > 1 for path in file_paths)
+
+
+def _extract_zip_member(archive, member, member_path, target_dir, strip_root):
+    target_parts = member_path.parts[1:] if strip_root else member_path.parts
+    if not target_parts:
+        return
+
+    target_path = target_dir.joinpath(*target_parts)
+    if member.is_dir():
+        target_path.mkdir(parents=True, exist_ok=True)
+        return
+
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    with archive.open(member) as source, target_path.open("wb") as target:
+        shutil.copyfileobj(source, target)
+
+
 def _extract_project_zip(uploaded_file, target_dir):
     _clear_directory_contents(target_dir)
 
     try:
         with zipfile.ZipFile(uploaded_file) as archive:
-            for member in archive.infolist():
+            members = archive.infolist()
+            member_paths = []
+            for member in members:
                 if not _is_safe_zip_member(member.filename):
                     _clear_directory_contents(target_dir)
                     return None, "压缩包包含非法路径"
-            archive.extractall(target_dir)
+                member_path = _zip_member_path(member.filename)
+                if member.is_dir() and len(member_path.parts) == 1:
+                    continue
+                member_paths.append(member_path)
+
+            strip_root = _should_strip_zip_root(member_paths)
+            for member in members:
+                member_path = _zip_member_path(member.filename)
+                with suppress(IndexError):
+                    _extract_zip_member(
+                        archive,
+                        member,
+                        member_path,
+                        target_dir,
+                        strip_root,
+                    )
     except zipfile.BadZipFile:
         _clear_directory_contents(target_dir)
         return None, "上传文件必须是 zip 压缩包"
