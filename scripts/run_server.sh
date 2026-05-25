@@ -4,7 +4,7 @@ set -euo pipefail
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_DIR"
 
-PROJECT_WORKSPACE_DIR="${PROJECT_WORKSPACE_DIR:-$(cd "$PROJECT_DIR/.." && pwd)}"
+PROJECT_WORKSPACE_DIR="${PROJECT_WORKSPACE_DIR:-/usr/share/nginx/client}"
 APP_HOST="${APP_HOST:-0.0.0.0}"
 APP_PORT="${APP_PORT:-8000}"
 CHECK_HOST="${CHECK_HOST:-127.0.0.1}"

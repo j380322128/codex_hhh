@@ -94,7 +94,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 TEMPLATE_PACKAGE_DIR = BASE_DIR / "templates_packages"
 
 PROJECT_WORKSPACE_DIR = Path(
-    os.environ.get("PROJECT_WORKSPACE_DIR", BASE_DIR.parent)
+    os.environ.get("PROJECT_WORKSPACE_DIR", "/usr/share/nginx/client")
 ).resolve()
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
