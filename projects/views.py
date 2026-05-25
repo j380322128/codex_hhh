@@ -348,8 +348,19 @@ def _zip_member_path(member_name):
     return PurePosixPath(member_name)
 
 
+def _is_zip_metadata_member(member_path):
+    return any(
+        part == "__MACOSX" or part == ".DS_Store" or part.startswith("._")
+        for part in member_path.parts
+    )
+
+
 def _should_strip_zip_root(member_paths):
-    file_paths = [path for path in member_paths if path.parts]
+    file_paths = [
+        path
+        for path in member_paths
+        if path.parts and not _is_zip_metadata_member(path)
+    ]
     if not file_paths:
         return False
     top_levels = {path.parts[0] for path in file_paths}
@@ -383,6 +394,8 @@ def _extract_project_zip(uploaded_file, target_dir):
                     _clear_directory_contents(target_dir)
                     return None, "压缩包包含非法路径"
                 member_path = _zip_member_path(member.filename)
+                if _is_zip_metadata_member(member_path):
+                    continue
                 if member.is_dir() and len(member_path.parts) == 1:
                     continue
                 member_paths.append(member_path)
@@ -390,6 +403,8 @@ def _extract_project_zip(uploaded_file, target_dir):
             strip_root = _should_strip_zip_root(member_paths)
             for member in members:
                 member_path = _zip_member_path(member.filename)
+                if _is_zip_metadata_member(member_path):
+                    continue
                 with suppress(IndexError):
                     _extract_zip_member(
                         archive,
