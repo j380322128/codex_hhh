@@ -16,9 +16,9 @@ from django.views.decorators.http import require_http_methods
 from .models import Department, Project, ProjectCategory
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".bmp", ".ico"}
-TEMPLATE_PACKAGE_FILES = {
-    Project.TEMPLATE_PC: "pc_tempate.zip",
-    Project.TEMPLATE_MOBILE: "wap_template.zip",
+TEMPLATE_PACKAGE_CANDIDATES = {
+    Project.TEMPLATE_PC: ["pc_tempate.zip", "pc_template.zip"],
+    Project.TEMPLATE_MOBILE: ["wap_template.zip"],
 }
 
 
@@ -56,8 +56,21 @@ def _parse_int_id(value, field_name, errors):
 
 
 def _template_package_path(template):
-    filename = TEMPLATE_PACKAGE_FILES.get(template, f"{template}.zip")
-    return settings.TEMPLATE_PACKAGE_DIR / filename
+    for filename in TEMPLATE_PACKAGE_CANDIDATES.get(template, [f"{template}.zip"]):
+        package_path = settings.TEMPLATE_PACKAGE_DIR / filename
+        if package_path.exists():
+            return package_path
+    return settings.TEMPLATE_PACKAGE_DIR / TEMPLATE_PACKAGE_CANDIDATES.get(
+        template,
+        [f"{template}.zip"],
+    )[0]
+
+
+def _template_package_expected_paths(template):
+    return [
+        str(settings.TEMPLATE_PACKAGE_DIR / filename)
+        for filename in TEMPLATE_PACKAGE_CANDIDATES.get(template, [f"{template}.zip"])
+    ]
 
 
 def _project_files_dir(project_id):
@@ -81,6 +94,7 @@ def _template_package_payload(request, template):
         "name": package_path.name,
         "template": template,
         "exists": package_path.exists(),
+        "expected_paths": _template_package_expected_paths(template),
         "download_url": request.build_absolute_uri(download_url),
     }
 
@@ -305,8 +319,9 @@ def _validate_project_host_unique(values, project=None):
     queryset = Project.objects.filter(host=host)
     if project is not None:
         queryset = queryset.exclude(id=project.id)
-    if queryset.exists():
-        return "主机名已存在"
+    existing_project = queryset.first()
+    if existing_project:
+        return f"主机名已存在，对应项目ID：{existing_project.id}"
     return None
 
 
@@ -348,7 +363,9 @@ def _extract_project_zip(uploaded_file, target_dir):
 def _extract_template_package_to_project(project):
     package_path = _template_package_path(project.template)
     if not package_path.exists():
-        return None, "模板压缩包不存在"
+        return None, "模板压缩包不存在，请检查：" + " 或 ".join(
+            _template_package_expected_paths(project.template)
+        )
 
     try:
         with package_path.open("rb") as package_file:
@@ -524,7 +541,9 @@ def projects(request):
     if host_error:
         errors["host"] = host_error
     if "template" in values and not _template_package_path(values["template"]).exists():
-        errors["template"] = "模板压缩包不存在"
+        errors["template"] = "模板压缩包不存在，请检查：" + " 或 ".join(
+            _template_package_expected_paths(values["template"])
+        )
     if errors:
         return _error("参数错误", errors=errors)
 

@@ -256,7 +256,7 @@ POST /api/projects/
 
 模板对应关系：
 
-- `template=pc`：解压 `templates_packages/pc_tempate.zip`
+- `template=pc`：解压 `templates_packages/pc_tempate.zip`，同时兼容 `templates_packages/pc_template.zip`
 - `template=mobile`：解压 `templates_packages/wap_template.zip`
 
 如果对应模板压缩包不存在或不是合法 zip，新建项目会失败并回滚数据库记录。
