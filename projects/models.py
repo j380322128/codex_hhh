@@ -24,6 +24,7 @@ class Department(models.Model):
 
 class ProjectCategory(models.Model):
     name = models.CharField("分类名称", max_length=80)
+    prompt = models.TextField("分类提示词", blank=True, default="")
     department = models.ForeignKey(
         Department,
         on_delete=models.CASCADE,

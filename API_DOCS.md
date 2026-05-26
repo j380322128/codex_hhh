@@ -69,7 +69,7 @@ Content-Type: application/json
 | PATCH | `/api/projects/<project_id>/` | 局部更新项目 |
 | DELETE | `/api/projects/<project_id>/` | 删除项目 |
 | POST | `/api/projects/upload-package/` | 上传并解压项目压缩包 |
-| GET | `/api/template-packages/<template>/download/` | 下载模板压缩包 |
+| GET | `/api/template-packages/<project_id>/download/` | 下载项目压缩包 |
 
 ## 一级分类 / 部门
 
@@ -94,6 +94,7 @@ GET /api/departments/?include_categories=1
         {
           "id": "1",
           "name": "产品原型",
+          "prompt": "",
           "department_id": "1",
           "department_name": "产品研发中心",
           "sort_order": 10
@@ -151,10 +152,20 @@ POST /api/categories/
 ```json
 {
   "name": "产品原型",
+  "prompt": "适用于产品原型类需求的通用提示词",
   "department_id": 1,
   "sort_order": 10
 }
 ```
+
+字段说明：
+
+| 字段 | 必填 | 说明 |
+| --- | --- | --- |
+| name | 是 | 二级分类名称 |
+| prompt | 否 | 二级分类提示词 |
+| department_id | 是 | 所属一级分类自增 ID |
+| sort_order | 否 | 排序值，越小越靠前 |
 
 ### 获取 / 修改 / 删除二级分类
 
@@ -166,6 +177,23 @@ DELETE /api/categories/<category_id>/
 ```
 
 说明：`category_id` 是自增整数。
+
+二级分类相关接口响应会返回 `prompt` 字段，例如：
+
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "id": "1",
+    "name": "产品原型",
+    "prompt": "适用于产品原型类需求的通用提示词",
+    "department_id": "1",
+    "department_name": "产品研发中心",
+    "sort_order": 10
+  }
+}
+```
 
 ## 项目
 
@@ -213,7 +241,7 @@ GET /api/projects/?department_id=<department_id>&category_id=<category_id>&keywo
         "name": "pc_tempate.zip",
         "template": "pc",
         "exists": true,
-        "download_url": "http://127.0.0.1:8000/api/template-packages/pc/download/"
+        "download_url": "http://127.0.0.1:8000/api/template-packages/99999999/download/"
       }
     }
   ]
@@ -252,7 +280,7 @@ POST /api/projects/
 | department_id | 是 | 所属一级分类自增 ID |
 | category_id | 是 | 所属二级分类自增 ID，必须属于当前一级分类 |
 
-说明：新建项目成功后，后端会自动在项目工作目录下创建项目文件夹，并根据 `template` 解压对应模板包到该文件夹中。服务器默认位置为 `/usr/share/nginx/client/<project_id>/`。
+说明：新建项目成功后，后端会自动在项目工作目录下创建以 `host` 命名的项目文件夹，并根据 `template` 解压对应模板包到该文件夹中。服务器默认位置为 `/usr/share/nginx/client/<host>/`。
 
 模板对应关系：
 
@@ -272,12 +300,12 @@ DELETE /api/projects/<project_id>/
 
 说明：`project_id` 是 8 位短 UUID 字符串。
 
-删除项目时会先删除项目目录 `/usr/share/nginx/client/<project_id>/`。如果目录删除失败，接口会返回错误并保留数据库记录。
+删除项目时会先根据项目 ID 找到对应的 `host`，再删除项目目录 `/usr/share/nginx/client/<host>/`。如果目录删除失败，接口会返回错误并保留数据库记录。
 
 项目详情响应会额外返回 `image_assets`。后端会读取：
 
 ```text
-/usr/share/nginx/client/<project_id>/assets/images/
+/usr/share/nginx/client/<host>/assets/images/
 ```
 
 下的所有图片资源，支持 `.jpg`、`.jpeg`、`.png`、`.gif`、`.webp`、`.svg`、`.bmp`、`.ico`。
@@ -307,9 +335,9 @@ GET /api/projects/<project_id>/images/<image_path>/
 说明：
 
 - `image_path` 是相对于 `assets/images/` 的路径。
-- 例如图片文件为 `/usr/share/nginx/client/99999999/assets/images/logo.png`，访问地址为 `/api/projects/99999999/images/logo.png/`。
-- 例如图片文件为 `/usr/share/nginx/client/99999999/assets/images/banner/home.png`，访问地址为 `/api/projects/99999999/images/banner/home.png/`。
-- 删除项目时，后端会同步删除 `/usr/share/nginx/client/<project_id>/` 文件夹。
+- 例如图片文件为 `/usr/share/nginx/client/project_center_admin/assets/images/logo.png`，访问地址为 `/api/projects/99999999/images/logo.png/`。
+- 例如图片文件为 `/usr/share/nginx/client/project_center_admin/assets/images/banner/home.png`，访问地址为 `/api/projects/99999999/images/banner/home.png/`。
+- 删除项目时，后端会同步删除 `/usr/share/nginx/client/<host>/` 文件夹。
 
 ### 上传并解压项目压缩包
 
@@ -332,11 +360,11 @@ multipart/form-data
 
 处理逻辑：
 
-- 根据 `project_id` 定位 `/usr/share/nginx/client/<project_id>/`。
+- 根据项目 `host` 定位 `/usr/share/nginx/client/<host>/`。
 - 如果项目文件夹不存在，会先创建。
 - 保留项目文件夹本身，删除文件夹内所有旧内容。
 - 校验上传 zip 内路径，禁止绝对路径和 `../`。
-- 将上传 zip 解压到 `/usr/share/nginx/client/<project_id>/`。
+- 将上传 zip 解压到 `/usr/share/nginx/client/<host>/`。
 - 如果 zip 解压后只有一个最外层目录，会自动去掉这层目录，只保留里面的文件内容。
 
 成功响应示例：
@@ -347,7 +375,7 @@ multipart/form-data
   "message": "ok",
   "data": {
     "project_id": "99999999",
-    "directory": "/usr/share/nginx/client/99999999",
+    "directory": "/usr/share/nginx/client/project_center_admin",
     "file_count": 2,
     "files": [
       "index.html",
@@ -357,19 +385,18 @@ multipart/form-data
 }
 ```
 
-## 模板压缩包
+## 项目压缩包
 
-### 下载模板压缩包
+### 下载项目压缩包
 
 ```http
-GET /api/template-packages/<template>/download/
+GET /api/template-packages/<project_id>/download/
 ```
 
 说明：
 
-- 下载 `pc` 模板：`GET /api/template-packages/pc/download/`，对应 `pc_tempate.zip`
-- 下载移动端模板：`GET /api/template-packages/mobile/download/`，对应 `wap_template.zip`
-- 文件需要放在项目根目录的 `templates_packages/` 文件夹中。
+- 根据项目 ID 下载该项目当前目录的 zip 包。
+- 后端会先根据 `project_id` 找到对应 `host`，再把 `/usr/share/nginx/client/<host>/` 目录复制后压缩返回。
 
 ## 常见错误
 

@@ -13,7 +13,7 @@ class DepartmentAdmin(admin.ModelAdmin):
 class ProjectCategoryAdmin(admin.ModelAdmin):
     list_display = ["name", "department", "sort_order", "created_at"]
     list_filter = ["department"]
-    search_fields = ["name"]
+    search_fields = ["name", "prompt"]
 
 
 @admin.register(Project)

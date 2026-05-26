@@ -105,7 +105,7 @@ chmod +x scripts/diagnose_server.sh
 - `.runtime/`：当服务器 Python 版本过低时，脚本安装的项目内 Python。
 - `.venv/`：项目虚拟环境。
 - `templates_packages/`：放置 `pc_tempate.zip`、`wap_template.zip` 模板压缩包。
-- `PROJECT_WORKSPACE_DIR/<project_id>/`：项目上传压缩包解压后的目录。服务器默认是 `/usr/share/nginx/client/<project_id>/`。
+- `PROJECT_WORKSPACE_DIR/<host>/`：项目上传压缩包解压后的目录。服务器默认是 `/usr/share/nginx/client/<host>/`。
 
 ## 重新部署
 

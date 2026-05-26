@@ -23,7 +23,7 @@ urlpatterns = [
     ),
     path("projects/<str:project_id>/", views.project_detail, name="project_detail"),
     path(
-        "template-packages/<str:template>/download/",
+        "template-packages/<str:project_id>/download/",
         views.template_package_download,
         name="template_package_download",
     ),

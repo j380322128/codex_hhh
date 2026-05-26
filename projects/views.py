@@ -1,6 +1,7 @@
 import json
 import mimetypes
 import shutil
+import tempfile
 import zipfile
 from contextlib import suppress
 from json import JSONDecodeError
@@ -56,6 +57,13 @@ def _parse_int_id(value, field_name, errors):
         return None
 
 
+def _is_safe_workspace_name(name):
+    if not isinstance(name, str) or not name:
+        return False
+    path = PurePosixPath(name)
+    return not path.is_absolute() and len(path.parts) == 1 and name not in {".", ".."}
+
+
 def _template_package_path(template):
     for filename in TEMPLATE_PACKAGE_CANDIDATES.get(template, [f"{template}.zip"]):
         package_path = settings.TEMPLATE_PACKAGE_DIR / filename
@@ -74,9 +82,12 @@ def _template_package_expected_paths(template):
     ]
 
 
-def _project_files_dir(project_id):
+def _project_files_dir(project_name):
+    if not _is_safe_workspace_name(str(project_name)):
+        raise ValueError("项目目录非法")
+
     workspace_dir = settings.PROJECT_WORKSPACE_DIR.resolve()
-    project_dir = (workspace_dir / str(project_id)).resolve()
+    project_dir = (workspace_dir / str(project_name)).resolve()
     if str(project_dir) == str(workspace_dir) or not str(project_dir).startswith(
         str(workspace_dir) + "/"
     ):
@@ -84,24 +95,47 @@ def _project_files_dir(project_id):
     return project_dir
 
 
-def _project_images_dir(project_id):
-    return _project_files_dir(project_id) / "assets" / "images"
+def _project_images_dir(project_name):
+    return _project_files_dir(project_name) / "assets" / "images"
 
 
-def _template_package_payload(request, template):
-    package_path = _template_package_path(template)
-    download_url = reverse("projects:template_package_download", args=[template])
+def _project_category_prompt_path(project):
+    return _project_files_dir(project.host) / "category_prompt.md"
+
+
+def _category_prompt_text(project):
+    prompt = (
+        ProjectCategory.objects.filter(id=project.category_id)
+        .values_list("prompt", flat=True)
+        .first()
+    )
+    return prompt or ""
+
+
+def _write_project_category_prompt(project, prompt=None):
+    prompt_path = _project_category_prompt_path(project)
+    prompt_path.parent.mkdir(parents=True, exist_ok=True)
+    prompt_path.write_text(
+        _category_prompt_text(project) if prompt is None else prompt,
+        encoding="utf-8",
+    )
+    return prompt_path
+
+
+def _template_package_payload(request, project):
+    package_path = _template_package_path(project.template)
+    download_url = reverse("projects:template_package_download", args=[project.id])
     return {
         "name": package_path.name,
-        "template": template,
+        "template": project.template,
         "exists": package_path.exists(),
-        "expected_paths": _template_package_expected_paths(template),
+        "expected_paths": _template_package_expected_paths(project.template),
         "download_url": request.build_absolute_uri(download_url),
     }
 
 
 def _project_image_assets(project, request):
-    images_dir = _project_images_dir(project.id)
+    images_dir = _project_images_dir(project.host)
     if not images_dir.exists():
         return []
 
@@ -146,7 +180,7 @@ def _project_payload(project, request=None, include_assets=False):
         },
         "created_at": project.created_at.strftime("%Y-%m-%d %H:%M:%S"),
         "updated_at": project.updated_at.strftime("%Y-%m-%d %H:%M:%S"),
-        "template_package": _template_package_payload(request, project.template)
+        "template_package": _template_package_payload(request, project)
         if request
         else None,
     }
@@ -172,6 +206,7 @@ def _category_payload(category):
     return {
         "id": str(category.id),
         "name": category.name,
+        "prompt": category.prompt,
         "department_id": str(category.department_id),
         "department_name": category.department.name if hasattr(category, "department") else "",
         "sort_order": category.sort_order,
@@ -214,6 +249,10 @@ def _validate_category_data(data, partial=False):
             errors["name"] = "分类名称不能为空"
         else:
             values["name"] = name
+
+    if "prompt" in data:
+        prompt = data.get("prompt") or ""
+        values["prompt"] = prompt.strip() if isinstance(prompt, str) else prompt
 
     department_id = data.get("department_id")
     if department_id is None:
@@ -335,9 +374,12 @@ def _is_safe_zip_member(member_name):
     return ".." not in member_path.parts
 
 
-def _clear_directory_contents(target_dir):
+def _clear_directory_contents(target_dir, preserve_names=None):
+    preserve_names = set(preserve_names or [])
     target_dir.mkdir(parents=True, exist_ok=True)
     for child in target_dir.iterdir():
+        if child.name in preserve_names:
+            continue
         if child.is_dir():
             shutil.rmtree(child)
         else:
@@ -383,8 +425,6 @@ def _extract_zip_member(archive, member, member_path, target_dir, strip_root):
 
 
 def _extract_project_zip(uploaded_file, target_dir):
-    _clear_directory_contents(target_dir)
-
     try:
         with zipfile.ZipFile(uploaded_file) as archive:
             members = archive.infolist()
@@ -401,6 +441,7 @@ def _extract_project_zip(uploaded_file, target_dir):
                 member_paths.append(member_path)
 
             strip_root = _should_strip_zip_root(member_paths)
+            _clear_directory_contents(target_dir, preserve_names={"category_prompt.md"})
             for member in members:
                 member_path = _zip_member_path(member.filename)
                 if _is_zip_metadata_member(member_path):
@@ -414,7 +455,7 @@ def _extract_project_zip(uploaded_file, target_dir):
                         strip_root,
                     )
     except zipfile.BadZipFile:
-        _clear_directory_contents(target_dir)
+        _clear_directory_contents(target_dir, preserve_names={"category_prompt.md"})
         return None, "上传文件必须是 zip 压缩包"
 
     extracted_files = [
@@ -434,13 +475,36 @@ def _extract_template_package_to_project(project):
 
     try:
         with package_path.open("rb") as package_file:
-            return _extract_project_zip(package_file, _project_files_dir(project.id))
+            return _extract_project_zip(package_file, _project_files_dir(project.host))
     except OSError as exc:
         return None, f"模板文件处理失败：{exc}"
 
 
-def _remove_project_dir(project_id):
-    project_dir = _project_files_dir(project_id)
+def _build_project_archive(project):
+    source_dir = _project_files_dir(project.host)
+    if not source_dir.exists() or not source_dir.is_dir():
+        return None, None, "项目文件夹不存在"
+
+    temp_dir = Path(tempfile.mkdtemp(prefix=f"{project.host}-archive-"))
+    copied_dir = temp_dir / project.host
+    try:
+        shutil.copytree(source_dir, copied_dir)
+        archive_path = Path(
+            shutil.make_archive(
+                str(temp_dir / project.host),
+                "zip",
+                root_dir=temp_dir,
+                base_dir=project.host,
+            )
+        )
+        return archive_path, temp_dir, None
+    except (OSError, shutil.Error) as exc:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        return None, None, f"项目压缩包生成失败：{exc}"
+
+
+def _remove_project_dir(project):
+    project_dir = _project_files_dir(project.host)
     if not project_dir.exists():
         return project_dir, None
 
@@ -626,10 +690,18 @@ def projects(request):
         return _error("主机名已存在", errors={"host": "主机名已存在"})
     extracted_files, error_message = _extract_template_package_to_project(project)
     if error_message:
-        project_dir = _project_files_dir(project.id)
+        project_dir = _project_files_dir(project.host)
         project.delete()
         shutil.rmtree(project_dir, ignore_errors=True)
         return _error(error_message, errors={"template": error_message})
+    try:
+        project.refresh_from_db()
+        _write_project_category_prompt(project)
+    except OSError as exc:
+        project_dir = _project_files_dir(project.host)
+        project.delete()
+        shutil.rmtree(project_dir, ignore_errors=True)
+        return _error(f"分类提示词文件写入失败：{exc}", errors={"category_prompt": str(exc)})
     return _success(_project_payload(project, request), status=201)
 
 
@@ -644,7 +716,7 @@ def project_detail(request, project_id):
         return _success(_project_payload(project, request, include_assets=True))
 
     if request.method == "DELETE":
-        project_dir, remove_error = _remove_project_dir(project.id)
+        project_dir, remove_error = _remove_project_dir(project)
         if remove_error:
             return _error(
                 remove_error,
@@ -659,6 +731,16 @@ def project_detail(request, project_id):
         return _error("请求体必须是合法 JSON")
 
     partial = request.method == "PATCH"
+    original_state = {
+        "host": project.host,
+        "name": project.name,
+        "template": project.template,
+        "description": project.description,
+        "prompt": project.prompt,
+        "department_id": project.department_id,
+        "category_id": project.category_id,
+        "category_prompt": project.category.prompt,
+    }
     values, errors = _validate_project_data(data, partial=partial)
     relation_error = _validate_project_relation(values, project)
     if relation_error:
@@ -681,25 +763,78 @@ def project_detail(request, project_id):
         project.save()
     except IntegrityError:
         return _error("主机名已存在", errors={"host": "主机名已存在"})
+
+    project.refresh_from_db()
+
+    original_dir = _project_files_dir(original_state["host"])
+    current_dir = _project_files_dir(project.host)
+    if original_state["host"] != project.host:
+        if current_dir.exists():
+            project.host = original_state["host"]
+            project.name = original_state["name"]
+            project.template = original_state["template"]
+            project.description = original_state["description"]
+            project.prompt = original_state["prompt"]
+            project.department_id = original_state["department_id"]
+            project.category_id = original_state["category_id"]
+            project.save()
+            return _error("目标项目文件夹已存在")
+        if original_dir.exists():
+            try:
+                shutil.move(str(original_dir), str(current_dir))
+            except OSError as exc:
+                project.host = original_state["host"]
+                project.name = original_state["name"]
+                project.template = original_state["template"]
+                project.description = original_state["description"]
+                project.prompt = original_state["prompt"]
+                project.department_id = original_state["department_id"]
+                project.category_id = original_state["category_id"]
+                project.save()
+                return _error(f"项目文件夹重命名失败：{exc}")
+        else:
+            current_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        project.refresh_from_db()
+        _write_project_category_prompt(project)
+    except OSError as exc:
+        if original_state["host"] != project.host:
+            with suppress(OSError):
+                shutil.move(str(current_dir), str(original_dir))
+        project.host = original_state["host"]
+        project.name = original_state["name"]
+        project.template = original_state["template"]
+        project.description = original_state["description"]
+        project.prompt = original_state["prompt"]
+        project.department_id = original_state["department_id"]
+        project.category_id = original_state["category_id"]
+        project.save()
+        with suppress(OSError):
+            _write_project_category_prompt(project, original_state["category_prompt"])
+        return _error(f"分类提示词文件写入失败：{exc}")
+
     project.refresh_from_db()
     return _success(_project_payload(project, request))
 
 
 @require_http_methods(["GET"])
-def template_package_download(request, template):
-    templates = {choice[0] for choice in Project.TEMPLATE_CHOICES}
-    if template not in templates:
-        return _error("模板不存在", status=404, code=404)
+def template_package_download(request, project_id):
+    project = Project.objects.select_related("department", "category").filter(id=project_id).first()
+    if project is None:
+        return _error("项目不存在", status=404, code=404)
 
-    package_path = _template_package_path(template)
-    if not package_path.exists():
-        return _error("模板压缩包不存在", status=404, code=404)
+    archive_path, temp_dir, error_message = _build_project_archive(project)
+    if error_message:
+        return _error(error_message, status=404 if error_message == "项目文件夹不存在" else 500)
 
-    return FileResponse(
-        package_path.open("rb"),
+    response = FileResponse(
+        archive_path.open("rb"),
         as_attachment=True,
-        filename=package_path.name,
+        filename=f"{project.host}.zip",
     )
+    response._resource_closers.append(lambda: shutil.rmtree(temp_dir, ignore_errors=True))
+    return response
 
 
 @require_http_methods(["GET"])
@@ -711,7 +846,7 @@ def project_image_asset(request, project_id, image_path):
     if not _is_safe_zip_member(image_path):
         return _error("图片路径非法", status=400)
 
-    image_file = _project_images_dir(project.id) / image_path
+    image_file = _project_images_dir(project.host) / image_path
     if not image_file.exists() or not image_file.is_file():
         return _error("图片不存在", status=404, code=404)
     if image_file.suffix.lower() not in IMAGE_EXTENSIONS:
@@ -739,10 +874,15 @@ def upload_project_package(request):
     if project is None:
         return _error("项目不存在", status=404, code=404)
 
-    target_dir = _project_files_dir(project.id)
+    target_dir = _project_files_dir(project.host)
     extracted_files, error_message = _extract_project_zip(uploaded_file, target_dir)
     if error_message:
         return _error(error_message, errors={"file": error_message})
+    try:
+        project.refresh_from_db()
+        _write_project_category_prompt(project)
+    except OSError as exc:
+        return _error(f"分类提示词文件写入失败：{exc}", errors={"category_prompt": str(exc)})
 
     return _success(
         {

@@ -21,14 +21,14 @@ python3 manage.py runserver
 - `pc_tempate.zip`
 - `wap_template.zip`
 
-项目上传压缩包会解压到项目工作目录的 `<project_id>/` 文件夹中。服务器默认项目工作目录是 `/usr/share/nginx/client`。
+项目上传压缩包会解压到项目工作目录的 `<host>/` 文件夹中。服务器默认项目工作目录是 `/usr/share/nginx/client`。
 
 ## 接口
 
 - `GET /api/departments/?include_categories=1`：一级分类/部门列表
 - `POST /api/departments/`：新增一级分类，JSON：`{"name":"产品研发中心","sort_order":10}`
 - `GET /api/categories/?department_id=<id>`：二级分类/项目类型列表
-- `POST /api/categories/`：新增二级分类，JSON：`{"name":"产品原型","department_id":1,"sort_order":10}`
+- `POST /api/categories/`：新增二级分类，JSON：`{"name":"产品原型","prompt":"二级分类提示词","department_id":1,"sort_order":10}`
 - `GET /api/projects/?department_id=<id>&category_id=<id>`：项目列表
 - `POST /api/projects/`：新建项目
 - `GET|PUT|PATCH|DELETE /api/projects/<project_id>/`：项目详情、更新、删除
