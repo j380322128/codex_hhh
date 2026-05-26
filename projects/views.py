@@ -119,6 +119,10 @@ def _project_images_dir(project):
     return _project_storage_dir(project) / "assets" / "images"
 
 
+def _project_config_path(project):
+    return _project_storage_dir(project) / ".config.json"
+
+
 def _project_category_prompt_path(project):
     return _project_storage_dir(project) / "category_prompt.md"
 
@@ -140,6 +144,16 @@ def _write_project_category_prompt(project, prompt=None):
         encoding="utf-8",
     )
     return prompt_path
+
+
+def _write_project_config(project):
+    config_path = _project_config_path(project)
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(
+        json.dumps({"project_id": str(project.id)}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    return config_path
 
 
 def _template_package_payload(request, project):
@@ -461,7 +475,10 @@ def _extract_project_zip(uploaded_file, target_dir):
                 member_paths.append(member_path)
 
             strip_root = _should_strip_zip_root(member_paths)
-            _clear_directory_contents(target_dir, preserve_names={"category_prompt.md"})
+            _clear_directory_contents(
+                target_dir,
+                preserve_names={"category_prompt.md", ".config.json"},
+            )
             for member in members:
                 member_path = _zip_member_path(member.filename)
                 if _is_zip_metadata_member(member_path):
@@ -475,7 +492,10 @@ def _extract_project_zip(uploaded_file, target_dir):
                         strip_root,
                     )
     except zipfile.BadZipFile:
-        _clear_directory_contents(target_dir, preserve_names={"category_prompt.md"})
+        _clear_directory_contents(
+            target_dir,
+            preserve_names={"category_prompt.md", ".config.json"},
+        )
         return None, "上传文件必须是 zip 压缩包"
 
     extracted_files = [
@@ -720,6 +740,7 @@ def projects(request):
         return _error(error_message, errors={"template": error_message})
     try:
         project.refresh_from_db()
+        _write_project_config(project)
         _write_project_category_prompt(project)
     except OSError as exc:
         project_dir = _project_storage_dir(project)
@@ -822,6 +843,7 @@ def project_detail(request, project_id):
 
     try:
         project.refresh_from_db()
+        _write_project_config(project)
         _write_project_category_prompt(project)
     except OSError as exc:
         if original_state["host"] != project.host:
@@ -835,6 +857,8 @@ def project_detail(request, project_id):
         project.department_id = original_state["department_id"]
         project.category_id = original_state["category_id"]
         project.save()
+        with suppress(OSError):
+            _write_project_config(project)
         with suppress(OSError):
             _write_project_category_prompt(project, original_state["category_prompt"])
         return _error(f"分类提示词文件写入失败：{exc}")
@@ -905,6 +929,7 @@ def upload_project_package(request):
         return _error(error_message, errors={"file": error_message})
     try:
         project.refresh_from_db()
+        _write_project_config(project)
         _write_project_category_prompt(project)
     except OSError as exc:
         return _error(f"分类提示词文件写入失败：{exc}", errors={"category_prompt": str(exc)})

@@ -93,8 +93,14 @@ class ProjectWorkspaceTests(TestCase):
         self.assertEqual(response.status_code, 201)
         project = Project.objects.get(host="demo_host")
         prompt_path = Path(self.tempdir.name) / "demo_host" / "category_prompt.md"
+        config_path = Path(self.tempdir.name) / "demo_host" / ".config.json"
         self.assertEqual(prompt_path.read_text(encoding="utf-8"), "分类提示词")
+        self.assertEqual(
+            json.loads(config_path.read_text(encoding="utf-8")),
+            {"project_id": project.id},
+        )
         self.assertTrue(prompt_path.exists())
+        self.assertTrue(config_path.exists())
         self.assertEqual(project.host, "demo_host")
 
     def test_delete_project_removes_host_directory(self):
@@ -152,6 +158,10 @@ class ProjectWorkspaceTests(TestCase):
         project_dir = Path(self.tempdir.name) / "upload_me"
         project_dir.mkdir(parents=True, exist_ok=True)
         (project_dir / "category_prompt.md").write_text("分类提示词", encoding="utf-8")
+        (project_dir / ".config.json").write_text(
+            json.dumps({"project_id": project.id}, ensure_ascii=False),
+            encoding="utf-8",
+        )
 
         zip_path = Path(self.tempdir.name) / "sample.zip"
         with tempfile.TemporaryDirectory() as tmp:
@@ -170,6 +180,10 @@ class ProjectWorkspaceTests(TestCase):
         self.assertEqual(
             (project_dir / "category_prompt.md").read_text(encoding="utf-8"),
             "分类提示词",
+        )
+        self.assertEqual(
+            json.loads((project_dir / ".config.json").read_text(encoding="utf-8")),
+            {"project_id": project.id},
         )
 
     def test_template_download_returns_project_archive(self):
