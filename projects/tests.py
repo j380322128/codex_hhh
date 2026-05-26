@@ -118,6 +118,27 @@ class ProjectWorkspaceTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(project_dir.exists())
 
+    def test_delete_project_removes_legacy_id_directory(self):
+        project = Project.objects.create(
+            host="legacy_host",
+            name="测试项目",
+            template="pc",
+            description="说明",
+            prompt="",
+            department=self.department,
+            category=self.category,
+        )
+        legacy_dir = Path(self.tempdir.name) / project.id
+        legacy_dir.mkdir(parents=True, exist_ok=True)
+        (legacy_dir / "category_prompt.md").write_text("分类提示词", encoding="utf-8")
+
+        response = self.client.delete(
+            reverse("projects:project_detail", args=[project.id]),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(legacy_dir.exists())
+
     def test_upload_package_preserves_category_prompt_file(self):
         project = Project.objects.create(
             host="upload_me",
@@ -173,3 +194,25 @@ class ProjectWorkspaceTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/zip")
         self.assertEqual(response["Content-Disposition"].split("filename=")[-1].strip('"'), "download_me.zip")
+
+    def test_template_download_reads_legacy_id_directory(self):
+        project = Project.objects.create(
+            host="download_legacy",
+            name="测试项目",
+            template="pc",
+            description="说明",
+            prompt="",
+            department=self.department,
+            category=self.category,
+        )
+        legacy_dir = Path(self.tempdir.name) / project.id
+        legacy_dir.mkdir(parents=True, exist_ok=True)
+        (legacy_dir / "category_prompt.md").write_text("分类提示词", encoding="utf-8")
+        (legacy_dir / "index.html").write_text("hello", encoding="utf-8")
+
+        response = self.client.get(
+            reverse("projects:template_package_download", args=[project.id]),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/zip")

@@ -95,12 +95,32 @@ def _project_files_dir(project_name):
     return project_dir
 
 
-def _project_images_dir(project_name):
-    return _project_files_dir(project_name) / "assets" / "images"
+def _project_dir_candidates(project, host=None):
+    candidates = []
+    seen = set()
+    for project_name in [host or project.host, str(project.id)]:
+        project_name = str(project_name)
+        if project_name in seen or not _is_safe_workspace_name(project_name):
+            continue
+        seen.add(project_name)
+        candidates.append(_project_files_dir(project_name))
+    return candidates
+
+
+def _project_storage_dir(project, host=None):
+    candidates = _project_dir_candidates(project, host=host)
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return _project_files_dir(host or project.host)
+
+
+def _project_images_dir(project):
+    return _project_storage_dir(project) / "assets" / "images"
 
 
 def _project_category_prompt_path(project):
-    return _project_files_dir(project.host) / "category_prompt.md"
+    return _project_storage_dir(project) / "category_prompt.md"
 
 
 def _category_prompt_text(project):
@@ -135,7 +155,7 @@ def _template_package_payload(request, project):
 
 
 def _project_image_assets(project, request):
-    images_dir = _project_images_dir(project.host)
+    images_dir = _project_images_dir(project)
     if not images_dir.exists():
         return []
 
@@ -475,13 +495,13 @@ def _extract_template_package_to_project(project):
 
     try:
         with package_path.open("rb") as package_file:
-            return _extract_project_zip(package_file, _project_files_dir(project.host))
+            return _extract_project_zip(package_file, _project_storage_dir(project))
     except OSError as exc:
         return None, f"模板文件处理失败：{exc}"
 
 
 def _build_project_archive(project):
-    source_dir = _project_files_dir(project.host)
+    source_dir = _project_storage_dir(project)
     if not source_dir.exists() or not source_dir.is_dir():
         return None, None, "项目文件夹不存在"
 
@@ -504,15 +524,19 @@ def _build_project_archive(project):
 
 
 def _remove_project_dir(project):
-    project_dir = _project_files_dir(project.host)
-    if not project_dir.exists():
-        return project_dir, None
+    deleted_dirs = []
+    for project_dir in _project_dir_candidates(project):
+        if not project_dir.exists():
+            continue
+        try:
+            shutil.rmtree(project_dir)
+        except OSError as exc:
+            return project_dir, f"项目文件夹删除失败：{exc}"
+        deleted_dirs.append(project_dir)
 
-    try:
-        shutil.rmtree(project_dir)
-    except OSError as exc:
-        return project_dir, f"项目文件夹删除失败：{exc}"
-    return project_dir, None
+    if deleted_dirs:
+        return deleted_dirs[0], None
+    return _project_files_dir(project.host), None
 
 
 @csrf_exempt
@@ -690,7 +714,7 @@ def projects(request):
         return _error("主机名已存在", errors={"host": "主机名已存在"})
     extracted_files, error_message = _extract_template_package_to_project(project)
     if error_message:
-        project_dir = _project_files_dir(project.host)
+        project_dir = _project_storage_dir(project)
         project.delete()
         shutil.rmtree(project_dir, ignore_errors=True)
         return _error(error_message, errors={"template": error_message})
@@ -698,7 +722,7 @@ def projects(request):
         project.refresh_from_db()
         _write_project_category_prompt(project)
     except OSError as exc:
-        project_dir = _project_files_dir(project.host)
+        project_dir = _project_storage_dir(project)
         project.delete()
         shutil.rmtree(project_dir, ignore_errors=True)
         return _error(f"分类提示词文件写入失败：{exc}", errors={"category_prompt": str(exc)})
@@ -731,6 +755,7 @@ def project_detail(request, project_id):
         return _error("请求体必须是合法 JSON")
 
     partial = request.method == "PATCH"
+    active_dir_before_update = _project_storage_dir(project)
     original_state = {
         "host": project.host,
         "name": project.name,
@@ -766,10 +791,10 @@ def project_detail(request, project_id):
 
     project.refresh_from_db()
 
-    original_dir = _project_files_dir(original_state["host"])
+    original_dir = active_dir_before_update
     current_dir = _project_files_dir(project.host)
     if original_state["host"] != project.host:
-        if current_dir.exists():
+        if current_dir.exists() and current_dir != original_dir:
             project.host = original_state["host"]
             project.name = original_state["name"]
             project.template = original_state["template"]
@@ -846,7 +871,7 @@ def project_image_asset(request, project_id, image_path):
     if not _is_safe_zip_member(image_path):
         return _error("图片路径非法", status=400)
 
-    image_file = _project_images_dir(project.host) / image_path
+    image_file = _project_images_dir(project) / image_path
     if not image_file.exists() or not image_file.is_file():
         return _error("图片不存在", status=404, code=404)
     if image_file.suffix.lower() not in IMAGE_EXTENSIONS:
@@ -874,7 +899,7 @@ def upload_project_package(request):
     if project is None:
         return _error("项目不存在", status=404, code=404)
 
-    target_dir = _project_files_dir(project.host)
+    target_dir = _project_storage_dir(project)
     extracted_files, error_message = _extract_project_zip(uploaded_file, target_dir)
     if error_message:
         return _error(error_message, errors={"file": error_message})
